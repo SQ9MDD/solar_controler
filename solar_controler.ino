@@ -44,6 +44,7 @@ Copyright Rysiek Labus SQ9MDD
  4. Poprawić wyświetlanie danych.
  
  CHANGELOG
+ 2015.09.16 v.2.7 czyszczenie kodu, wyrzucenie pisania po eepromie, reset gdy nie pracuje ładowanie
  2014.10.19 v.2.6 dodanie watchdoga po zawieszeniu się sterownika
  2014.08.29 v.2.5 zmiana parametrów pracy, odcięcie z 113 na 110
    Zmiana PWM duty max do 250
@@ -72,7 +73,7 @@ const int soft_ver = 26;
 //biblioteki
 #include <avr/pgmspace.h>
 #include <LCD5110_Basic.h>                       //podłączamy bibliotekę do obsługi wyświetlacza
-#include <EEPROM.h>
+//#include <EEPROM.h>
 #include <avr/wdt.h>  //watchdog
 
 //stałe (wejścia i wyjścia)
@@ -179,37 +180,37 @@ void pomiar_napiecia(){
 
 //dodaję próbki napięcie do pamięci eeprom ostatnie 30 dni
 //dwa zestawy po 30 próbek
-void multi_trend_saving(int zestaw){
-  int temp_eeprom = 0;
-  int aa = 0;
-  int bb = 0;
-  if(zestaw==0){
-    aa = 129;
-    bb = 101;
-  }
-  if(zestaw==1){
-    aa = 229;
-    bb = 201;    
-  }
-  //rejestr przesuwny
-  for(int a = aa; a >= bb; a--){
-    temp_eeprom = EEPROM.read(a);
-    delay(50);
-    EEPROM.write((a+1),temp_eeprom);
-  }
-  EEPROM.write(bb,batt_v);
-}
+//void multi_trend_saving(int zestaw){
+//  int temp_eeprom = 0;
+//  int aa = 0;
+//  int bb = 0;
+//  if(zestaw==0){
+//    aa = 129;
+//    bb = 101;
+//  }
+//  if(zestaw==1){
+//    aa = 229;
+//    bb = 201;    
+//  }
+//  //rejestr przesuwny
+//  for(int a = aa; a >= bb; a--){
+//    temp_eeprom = EEPROM.read(a);
+//    delay(50);
+//    EEPROM.write((a+1),temp_eeprom);
+//  }
+//  EEPROM.write(bb,batt_v);
+//}
 
 //wyswietlam dane zapisane w pamieci eeprom
-void multi_trend_printing(){
-  Serial.println("Printing accu V. log");
-  for(int a=1; a <= 30; a++){
-    Serial.print(EEPROM.read(a+100));
-    Serial.print(",");
-    Serial.println(EEPROM.read(a+200));
-  }
-  Serial.println("End of log");  
-}
+//void multi_trend_printing(){
+//  Serial.println("Printing accu V. log");
+//  for(int a=1; a <= 30; a++){
+//    Serial.print(EEPROM.read(a+100));
+//    Serial.print(",");
+//    Serial.println(EEPROM.read(a+200));
+//  }
+//  Serial.println("End of log");  
+//}
 
 //główna pętla regulacyjna układu
 void regulacja(){
@@ -361,8 +362,8 @@ void loop(){
   //Uruchamiamy wyświetlacz przy zmianie trybu pracy 
   if(poprzedni_tryb_pracy != tryb_pracy){
     digitalWrite(podswietlenie, LOW);
-    multi_trend_saving(tryb_pracy);  //przy zmianie trybu zapis do logu
-    multi_trend_printing();          //przy zmianie pracy wywal zapisana historie tymczasowo tak
+    //multi_trend_saving(tryb_pracy);  //przy zmianie trybu zapis do logu
+    //multi_trend_printing();          //przy zmianie pracy wywal zapisana historie tymczasowo tak
     light_off_time = millis() + (czas_podtrzymania_osw_lcd*1000);    
   }
   poprzedni_tryb_pracy = tryb_pracy; //if tryb pracy changed... brakuje mi tej komendy z GCL+
@@ -411,11 +412,19 @@ void loop(){
   }
   //poprawka naprawiająca problem z liczeniem czasu (a właściewie problem z przepełnieniem licznika milisekund)
   //zapobiega zawieszaniu się urządzenia co 49dni
-  if(millis() >= 4294967295){
-    exec_time = 0;
-    show_time = 0;
-    mesure_time = 0;
-    light_off_time = 0;    
+  //if(millis() >= 4294967295){
+  //  exec_time = 0;
+  //  show_time = 0;
+  //  mesure_time = 0;
+  //  light_off_time = 0;    
+  //}
+  
+  // zauważyłem przywieszki po długim czasie działania
+  // pomimo słońca sterownik nie ładuje program pracuje
+  // zrobię reset gdy nastąpią takie sytuacje
+  if(solar_v >= 200 && batt_v <= 119 && pwm_duty <= 1){
+     //cos jest nie halo restartujemy maszyne
+     asm volatile ("  jmp 0");
   }
   wdt_reset();                                  // give me another second to do stuff (pat the dog)
   //END OF THIS SHIT
