@@ -44,7 +44,8 @@ Copyright Rysiek Labus SQ9MDD
  4. Poprawić wyświetlanie danych.
  
  CHANGELOG
- 2014.08.29 zmiana parametrów pracy, odcięcie z 113 na 110
+ 2014.10.19 v.2.6 dodanie watchdoga po zawieszeniu się sterownika
+ 2014.08.29 v.2.5 zmiana parametrów pracy, odcięcie z 113 na 110
    Zmiana PWM duty max do 250
    Dodane zabezpieczenie przed przeładowaniem gdy kompletnie brak odbioru przez długi czas i mamy masę światła
    Włączenie podświetlenia gdy ładowanie dobiega końca i mamy światło.
@@ -66,12 +67,13 @@ Copyright Rysiek Labus SQ9MDD
  2014.06.08 Koncepcja i powstanie pierwszej wersji oprogramowania
  */
 //wersja softu
-const int soft_ver = 25;
+const int soft_ver = 26;
 
 //biblioteki
 #include <avr/pgmspace.h>
 #include <LCD5110_Basic.h>                       //podłączamy bibliotekę do obsługi wyświetlacza
 #include <EEPROM.h>
+#include <avr/wdt.h>  //watchdog
 
 //stałe (wejścia i wyjścia)
 #define accu_mesure_in A1
@@ -336,6 +338,8 @@ void setup(){
   delay(5000);                                                           //przerwa na reklamy
   lcd.clrScr();                                                          //czyszczenie ekranu  
   light_off_time = millis() + (czas_podtrzymania_osw_lcd*1000);          //po X seundach od znikniecia logo gasimy swiatlo (znaczy ustawiamy czas do zgaśnięcia na za 5sec)
+  //odpalam watchdoga
+  wdt_enable(WDTO_8S);                      //reset after one second, if no "pat the dog" received  
 }
 
 //główna pętla programu
@@ -413,5 +417,6 @@ void loop(){
     mesure_time = 0;
     light_off_time = 0;    
   }
+  wdt_reset();                                  // give me another second to do stuff (pat the dog)
   //END OF THIS SHIT
 }
