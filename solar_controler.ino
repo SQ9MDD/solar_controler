@@ -366,7 +366,7 @@ void loop(){
   
   // ładowanie zewnętrzne jeśli brak słońca lub napiecie akumulatora osiągneło poziom minimalny
   // wyłączenie ładowania po osiągnięciu poziomu maksymalnego lub gdy pojawi się słońce i rozpoczynam ładowanie ze słońca
-  if(tryb_pracy == 0 || batt_v <= accu_napiecie_min){
+  if(batt_v <= accu_napiecie_min){
       digitalWrite(ext_power, HIGH);   
   }elseif(tryb_pracy == 1 || batt_v >= accu_napiecie_max){
       digitalWrite(ext_power, LOW); 
