@@ -41,9 +41,10 @@ Copyright Rysiek Labus SQ9MDD
  1. Wykresy na LCD
  2. Dodać obsługę czujnika natężenia prądu i limity prądu
  3. Dodać obsługę czujnika temperatury akumulatorów i zaimplementować ogranieczenie prądów i napięć w funkcji temperatury
- 4. Poprawić wyświetlanie danych.
+ 4. Integracja z domoticzem, protokół mysensors
  
  CHANGELOG
+ 2015.11.27 v.2.8 zmiana PCB dodanie obsługi ładowarki sieciowej
  2015.09.16 v.2.7 czyszczenie kodu, wyrzucenie pisania po eepromie, reset gdy nie pracuje ładowanie
  2014.10.19 v.2.6 dodanie watchdoga po zawieszeniu się sterownika
  2014.08.29 v.2.5 zmiana parametrów pracy, odcięcie z 113 na 110
@@ -68,7 +69,7 @@ Copyright Rysiek Labus SQ9MDD
  2014.06.08 Koncepcja i powstanie pierwszej wersji oprogramowania
  */
 //wersja softu
-const int soft_ver = 26;
+const int soft_ver = 28;
 
 //biblioteki
 #include <avr/pgmspace.h>
@@ -82,6 +83,7 @@ const int soft_ver = 26;
 #define mosfet 9
 #define load 8
 #define podswietlenie 2
+#define ext_power 12
 
 /*************************************************************************************************************************************************************************************/
 // zmienne ustawienia/dane wejsciowe do ostrożnej modyfikacji
@@ -89,6 +91,7 @@ const int debug = 1;                                    //debuger: 1-wykresy pra
 const int accu_napiecie_max = 144;                      //maksymalny poziom napięcia baterii 14.4 * 10
 const int accu_napiecie_pracy = 138;                    //jeśli mam pełno słońca i napięcie na akumulatorze jest wieksze nie napiecie standby to jest setpoint pracy układu
 const int accu_napiecie_standby = 135;                  //jeśli jest mało słońca do tego poziomu ładuję akumulator, punkt przełączenia krzywych regulacji
+const int accu_napiecie_min = 115;                      //jesli uklad nie laduje i napięcie spadnie do tego poziomu odpal ładowanie zewnętrzne
 const int accu_napiecie_odciecia = 110;                 //napięcie przy którym odcinam obciążenie 10% po zdjeciu obciążenia było 50% zmieniam ze 113 na 110
 const int accu_napiecie_wlaczenia = 121;                //napięcie przy którym ponownie włączam obciążenie 51% (histereza z odcięciem zależna od obciążenia)
 const int accu_napiecie_spoczynkowe_full = 128;         //maksymalne napięcie spoczynkowe akumulatora (potrzebne do wyliczania procentowego naładowania akumulatora)
@@ -328,10 +331,12 @@ void setup(){
   pinMode(mosfet, OUTPUT);
   pinMode(load, OUTPUT);
   pinMode(podswietlenie, OUTPUT);
+  pinMode(ext_power, OUTPUT);
   Serial.begin(9600);  
   lcd.InitLCD(kontrast);                                                 //inicjalizacja z kontrastem
   digitalWrite(load, LOW);                                               //enable load at start
   digitalWrite(podswietlenie, LOW);                                      //uruchamiam swiatełko na starcie
+  digitalWrite(ext_power, LOW);                                          //gasze ladowanie zewnetrzne
   lcd.setFont(SmallFont);
   sprintf(buffor,"ver: %01u.%01u",soft_ver/10,soft_ver%10);              //wyświetlam wersje softu na starcie
   lcd.print(buffor,0,40);  
@@ -357,6 +362,14 @@ void loop(){
   } 
   else if(solar_v < batt_v){ 
     tryb_pracy = 0;
+  }
+  
+  // ładowanie zewnętrzne jeśli brak słońca lub napiecie akumulatora osiągneło poziom minimalny
+  // wyłączenie ładowania po osiągnięciu poziomu maksymalnego lub gdy pojawi się słońce i rozpoczynam ładowanie ze słońca
+  if(tryb_pracy == 0 || batt_v <= accu_napiecie_min){
+      digitalWrite(ext_power, HIGH);   
+  }elseif(tryb_pracy == 1 || batt_v >= accu_napiecie_max){
+      digitalWrite(ext_power, LOW); 
   }
 
   //Uruchamiamy wyświetlacz przy zmianie trybu pracy 
