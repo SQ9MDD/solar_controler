@@ -44,6 +44,7 @@ Copyright Rysiek Labus SQ9MDD
  4. Integracja z domoticzem, protokół mysensors
  
  CHANGELOG
+ 2015.11.30 v.2.9 Wysyłka danych do RS485 protokół mysensors
  2015.11.27 v.2.8 zmiana PCB dodanie obsługi ładowarki sieciowej
  2015.09.16 v.2.7 czyszczenie kodu, wyrzucenie pisania po eepromie, reset gdy nie pracuje ładowanie
  2014.10.19 v.2.6 dodanie watchdoga po zawieszeniu się sterownika
@@ -69,7 +70,7 @@ Copyright Rysiek Labus SQ9MDD
  2014.06.08 Koncepcja i powstanie pierwszej wersji oprogramowania
  */
 //wersja softu
-const int soft_ver = 28;
+const int soft_ver = 29;
 
 //biblioteki
 #include <avr/pgmspace.h>
@@ -84,6 +85,7 @@ const int soft_ver = 28;
 #define load 8
 #define podswietlenie 2
 #define ext_power 12
+#define ptt_pin 10
 
 /*************************************************************************************************************************************************************************************/
 // zmienne ustawienia/dane wejsciowe do ostrożnej modyfikacji
@@ -104,13 +106,14 @@ const unsigned long czestotliwosc_kaskady = 100;        //interwał uruchamiania
 const unsigned long czestotliwosc_showtime = 1000;      //refresh wyświetlacza LCD
 const unsigned long czestotliwosc_pomiaru = 10;         //interwał pomiaru napięcia
 const unsigned long czas_podtrzymania_osw_lcd = 10;     //czas podtrzymania podświetlenia LCD w sekundach
-const unsigned long plot_interval = 500;                //interwał wysyłania danych na port szeregowy
+const unsigned long plot_interval = 60000;              //interwał wysyłania danych do sieci RS-485 
 const int solar_pomiar_filtr = 10;                      //filtr pomiaru napięcia, liczba próbek do wyciągnięcia średniej
 const int przelicznik_podbicia_napiecia = 9;            //min 6 max 9 spadek na diodzie 0,7V plus 0,4V  dobrać doświadczalnie potrzebne do skutecznego ustawiania napięcia
 const int pwm_duty_min = 1;                             //minimalna wartość PWM podczas ładowania nie schodzić poniżej 1
 const int pwm_duty_max = 255;                           //maksymalna wartość PWM (244=95%) //zmiana do 100%
 const int czestotliwosc_pwm = 100;                      //dopuszczalne wartosci to 100 lub 30
 const int kontrast = 70;                                //kontrast wyświetlacza LCD
+const int net_addr = 9;                                 //adres sieciowy sterownika
 /*************************************************************************************************************************************************************************************/
 
 //zmienne pomocnicze nie dotykać
@@ -180,40 +183,6 @@ void pomiar_napiecia(){
     solar_pomiar_licznik = 0; 
   }
 }
-
-//dodaję próbki napięcie do pamięci eeprom ostatnie 30 dni
-//dwa zestawy po 30 próbek
-//void multi_trend_saving(int zestaw){
-//  int temp_eeprom = 0;
-//  int aa = 0;
-//  int bb = 0;
-//  if(zestaw==0){
-//    aa = 129;
-//    bb = 101;
-//  }
-//  if(zestaw==1){
-//    aa = 229;
-//    bb = 201;    
-//  }
-//  //rejestr przesuwny
-//  for(int a = aa; a >= bb; a--){
-//    temp_eeprom = EEPROM.read(a);
-//    delay(50);
-//    EEPROM.write((a+1),temp_eeprom);
-//  }
-//  EEPROM.write(bb,batt_v);
-//}
-
-//wyswietlam dane zapisane w pamieci eeprom
-//void multi_trend_printing(){
-//  Serial.println("Printing accu V. log");
-//  for(int a=1; a <= 30; a++){
-//    Serial.print(EEPROM.read(a+100));
-//    Serial.print(",");
-//    Serial.println(EEPROM.read(a+200));
-//  }
-//  Serial.println("End of log");  
-//}
 
 //główna pętla regulacyjna układu
 void regulacja(){
@@ -291,31 +260,32 @@ void zgas_swiatlo(){
   }
 }
 
-//osobna funkcja do debugowania algorytmu
-//wyrzucam dane na port rs232 i rysuję wykresy
-void plot_data(){
+void send_presence(){
+  digitalWrite(ptt_pin, HIGH);
+  delay(50);
+  Serial.println(String(net_addr) + ";1;1;0;30;" + String(net_addr) + ".AI1"); 
+  delay(10);
+  Serial.println(String(net_addr) + ";2;1;0;30;" + String(net_addr) + ".AI2");
+  delay(50);
+  digitalWrite(ptt_pin, LOW);
+    
+}
+
+//wysyłka danych do sieci RS485
+void send_data(){
   // debugger potrzebne do kalibracji przetworników ADC 
-  if(debug == 2){
-    Serial.print(analogRead(solar_mesure_in));
-    Serial.print(",");    
-    Serial.print(solar_v);    
-    Serial.print(",");
-    Serial.print(batt_v);
-    Serial.print(",");    
-    Serial.println(analogRead(accu_mesure_in));
-  }   
-  // debugger wyświetlanie parametrów pracy
-  if(debug == 1){
-    Serial.print(pwm_duty);
-    Serial.print(",");
-    Serial.print(punkt_pracy_tmp);
-    Serial.print(",");
-    Serial.print(solar_v);
-    Serial.print(",");
-    Serial.print(batt_v);
-    Serial.print(",");
-    Serial.println(uchyb);
-  } 
+  digitalWrite(ptt_pin, HIGH);
+  delay(50);
+  int prefix = solar_v / 10;
+  int sufix = solar_v % 10;
+  //9;1;1;0;38;14.4 przykład ramki napięcie na solarze
+  Serial.println(String(net_addr) + ";1;1;0;38;" + String(prefix) + "." + String(sufix)); 
+  prefix = batt_v / 10;
+  sufix = batt_v % 10;
+  //9;2;1;0;38;14.4 przykład ramki napięcie na akumulatorze
+  Serial.println(String(net_addr) + ";2;1;0;38;" + String(prefix) + "." + String(sufix));
+  delay(50);
+  digitalWrite(ptt_pin, LOW);
 }
 
 //setup
@@ -346,6 +316,7 @@ void setup(){
   light_off_time = millis() + (czas_podtrzymania_osw_lcd*1000);          //po X seundach od znikniecia logo gasimy swiatlo (znaczy ustawiamy czas do zgaśnięcia na za 5sec)
   //odpalam watchdoga
   wdt_enable(WDTO_8S);                      //reset after one second, if no "pat the dog" received  
+  send_presence();
 }
 
 //główna pętla programu
@@ -368,7 +339,7 @@ void loop(){
   // wyłączenie ładowania po osiągnięciu poziomu maksymalnego lub gdy pojawi się słońce i rozpoczynam ładowanie ze słońca
   if(batt_v <= accu_napiecie_min){
       digitalWrite(ext_power, HIGH);   
-  }elseif(tryb_pracy == 1 || batt_v >= accu_napiecie_max){
+  }else if(tryb_pracy == 1 || batt_v >= accu_napiecie_max){
       digitalWrite(ext_power, LOW); 
   }
 
@@ -402,8 +373,8 @@ void loop(){
   }
 
   //dane na port usb/rs do wykresów
-  if(millis() >= plot_time && debug != 0){
-    plot_data();
+  if(millis() >= plot_time){
+    send_data();
     plot_time = millis() + plot_interval;
   }    
 
@@ -423,15 +394,7 @@ void loop(){
   else if(batt_v < 135){
     zgas_swiatlo();
   }
-  //poprawka naprawiająca problem z liczeniem czasu (a właściewie problem z przepełnieniem licznika milisekund)
-  //zapobiega zawieszaniu się urządzenia co 49dni
-  //if(millis() >= 4294967295){
-  //  exec_time = 0;
-  //  show_time = 0;
-  //  mesure_time = 0;
-  //  light_off_time = 0;    
-  //}
-  
+
   // zauważyłem przywieszki po długim czasie działania
   // pomimo słońca sterownik nie ładuje program pracuje
   // zrobię reset gdy nastąpią takie sytuacje
